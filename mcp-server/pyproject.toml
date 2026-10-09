@@ -1,0 +1,16 @@
+[project]
+name = "cs-lit-review-mcp"
+version = "0.1.0"
+description = "MCP tools for searching free scholarly metadata APIs in computer science"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.0,<2"]
+
+[project.scripts]
+cs-lit-review-mcp = "cs_lit_review_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
