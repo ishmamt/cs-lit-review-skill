@@ -9,8 +9,8 @@ Use this skill to find and synthesize relevant computer science research. Search
 
 ## Workflow
 
-1. Define the research question and the search scope. Identify the subfield, date range, publication types, and review depth when they matter.
-2. Ask a focused follow-up question if an unclear scope choice could change which papers are found. Do not ask for details that are not needed. If the request is clear enough, proceed and state reasonable scope choices.
+1. Define the research question and the search scope. Identify the subfield, publication years, publication types, and review depth when they matter.
+2. Before using any search tools, identify scope choices that could change retrieval or synthesis. Ask focused follow-up questions when needed. Ask all needed questions together when practical, then wait for the user's answers before searching. If the original prompt does not state publication years or a clear relative period, ask which year range to use. Treat terms such as "recent" as unspecified. If the prompt gives a usable range, proceed and state reasonable choices for any remaining details.
 3. Turn the question into a small set of search queries. Include field terms, common synonyms, and relevant method names. Search more than one source when tools are available.
 4. Record the sources, queries, search date, and any filters. Treat search results as discovery records, not proof of relevance or quality.
 5. Deduplicate records by DOI, arXiv ID, DBLP key, or Semantic Scholar ID. Use normalized title, author, and year only as fallback signals.
@@ -56,3 +56,5 @@ Ask only questions that can materially improve retrieval or synthesis. Useful to
 - Are there known papers, methods, or venues that should seed the search?
 
 Ask the smallest number of questions needed. If the user does not answer, proceed only when the remaining scope is still useful and state the assumption in the review.
+
+Do not run search tools until the user answers the year-range question and any other necessary scope questions. If a nonessential question remains unanswered, proceed only when the scope is still useful and state the assumption in the review.
