@@ -27,7 +27,7 @@ Restart Codex. The skill and its scholarly search tools will then be available a
 
 ## Use
 
-Ask Codex to review a computer science research topic. State the date range, paper types, and review depth when they matter. The skill searches available sources, assesses papers, and writes a cited Markdown review.
+Ask Codex to review a computer science research topic. Give a year range if you have one. The skill asks when it is missing, then searches in adaptive rounds and follows useful citation trails. The default focused mode targets about 30 relevant papers, screens up to 80 unique candidates, and retrieves up to 320 raw records. Quick and systematic modes are also available. The Markdown review reports search and screening counts.
 
 ## License
 

@@ -30,6 +30,12 @@ Each result includes available values for `title`, `authors`, `year`, `venue`, `
 
 - Search results include their provider name and submitted query.
 - Provider-specific ordering is preserved within each source. Cross-provider order is not a global relevance ranking.
-- The server applies per-provider result limits and a short request timeout. A failed provider returns an error entry while other providers can still return records.
+- `search_papers` returns up to 10 records per provider per query by default. The caller can set `limit_per_source` from 1 to 25.
+- Limits apply to each query, not to the full review. With all four providers, one query can return up to 40 records by default or 100 at the maximum. Multiple queries can return duplicates.
+- Citation and reference expansion returns up to 20 records per request by default and caps requests at 25.
+- The review workflow tracks raw records across queries, then deduplicates them before screening. It applies a separate unique-candidate screening budget and a target for included papers.
+- Count records from citation and reference expansion toward the same raw-record budget as query results.
+- The server applies a short request timeout. A failed provider returns an error entry while other providers can still return records.
 - Search is a discovery aid. Review authors must judge relevance, evidence strength, and coverage.
+- The review workflow adapts query rounds to coverage gaps and new relevant-paper yield. It reports raw, deduplicated, screened, and included counts, along with provider errors.
 - API availability, policies, fields, and limits can change. Check provider documentation when changing the adapters.

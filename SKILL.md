@@ -11,21 +11,34 @@ Use this skill to find and synthesize relevant computer science research. Search
 
 1. Define the research question and the search scope. Identify the subfield, publication years, publication types, and review depth when they matter.
 2. Before using any search tools, identify scope choices that could change retrieval or synthesis. Ask focused follow-up questions when needed. Ask all needed questions together when practical, then wait for the user's answers before searching. If the original prompt does not state publication years or a clear relative period, ask which year range to use. Treat terms such as "recent" as unspecified. If the prompt gives a usable range, proceed and state reasonable choices for any remaining details.
-3. Turn the question into a small set of search queries. Include field terms, common synonyms, and relevant method names. Search more than one source when tools are available.
-4. Record the sources, queries, search date, and any filters. Treat search results as discovery records, not proof of relevance or quality.
-5. Deduplicate records by DOI, arXiv ID, DBLP key, or Semantic Scholar ID. Use normalized title, author, and year only as fallback signals.
-6. Screen candidate papers against the question. Give concise reasons for exclusions when the user requests a systematic or auditable search.
-7. Check important citation details against the source record and, when possible, the publisher or preprint page. Mark fields that disagree or remain unavailable.
-8. Synthesize the papers by themes, methods, findings, or time periods. Explain important differences between studies and identify evidence gaps without claiming more than the sources support.
-9. Write the review to a Markdown file in the working directory. Use a clear filename such as `cs_literature_review.md`, unless the user requests another path.
-10. Write the review prose in STE-flavored style. Keep technical terms, method names, assumptions, and qualifications that carry meaning. Define a specialized term when the reader may need it. Do not remove important detail to make the prose simpler. Read the `ste-writing` skill when it is available.
-11. Give the user the file path and a short account of the search scope and any important coverage limits.
+3. Choose a search depth. Use the focused preset by default unless the user requests a different depth or paper count. The presets and budgets are in Search behavior.
+4. Build an initial set of queries that covers the main concepts, synonyms, methods, and themes. Search more than one source when tools are available.
+5. Record the sources, queries, search date, and filters. Treat search results as discovery records, not proof of relevance or quality.
+6. Deduplicate records by DOI, arXiv ID, DBLP key, or Semantic Scholar ID. Use normalized title, author, and year only as fallback signals.
+7. Screen unique candidates against the question. Give concise reasons for exclusions when the user requests a systematic or auditable search.
+8. Adapt the next search round to uncovered themes and relevant new terms. Expand from useful papers through their references and citations when tools allow. Stop under the saturation or budget rules in Search behavior.
+9. Check important citation details against the source record and, when possible, the publisher or preprint page. Mark fields that disagree or remain unavailable.
+10. Synthesize the papers by themes, methods, findings, or time periods. Explain important differences between studies and identify evidence gaps without claiming more than the sources support.
+11. Write the review to a Markdown file in the working directory. Use a clear filename such as `cs_literature_review.md`, unless the user requests another path.
+12. Write the review prose in STE-flavored style. Keep technical terms, method names, assumptions, and qualifications that carry meaning. Define a specialized term when the reader may need it. Do not remove important detail to make the prose simpler. Read the `ste-writing` skill when it is available.
+13. Give the user the file path, the search counts, a short account of the search scope, and any important coverage limits.
 
 ## Search behavior
 
 - Use the `cs-lit-review` MCP server tools when they are configured. Read [search-sources.md](references/search-sources.md) for provider behavior and limits.
 - Search multiple sources when practical because coverage and metadata differ. Do not describe a search as exhaustive unless its sources and method support that claim.
 - Use citation and reference expansion to find related work when those tools are available. Keep expanded results distinct from direct query results.
+- Adapt searches in rounds. After each round, deduplicate and screen titles and abstracts. Add queries only to fill a topic or method gap, follow a useful citation trail, or test a new term found in relevant papers. Do not repeat a query with only superficial wording changes.
+- Use these search-depth presets unless the user gives a different target:
+  - **Quick:** target about 15 included papers, screen up to 40 unique candidates, and retrieve up to 160 raw records.
+  - **Focused (default):** target about 30 included papers, screen up to 80 unique candidates, and retrieve up to 320 raw records.
+  - **Systematic:** set no inclusion target. Document the query plan, expansion rules, sources, and provider limits before searching. Screen every record returned by that protocol. Do not call this exhaustive unless the search method supports that claim.
+- Treat paper targets as goals, not inclusion quotas. Never include a weak or irrelevant paper to meet a target. If the topic has few eligible papers, report the shortfall.
+- For broad topics, identify the main themes before searching. Group them into at most five screening themes, then screen at least five unique candidates per theme when available. Use remaining slots by relevance. Do not force a fixed number of included papers per theme.
+- Continue expanding while an applicable target is unmet or a material theme lacks evidence, as long as useful search leads and budget remain. Once themes have useful coverage, stop after two consecutive expansion rounds each add fewer than three relevant, unique papers, even if the target remains unmet. Stop earlier when the budget is exhausted, all usable search sources fail, or no targeted query or citation lead remains. Report any unmet target or theme.
+- Track raw records returned by direct and citation searches, unique records after deduplication, candidates screened, relevant papers included, and new relevant papers from each expansion round. Keep citation-expanded records distinct from direct query results.
+- `search_papers` returns up to 10 records per provider per query by default and caps requests at 25. Track the raw-record budget across all queries and lower the per-provider limit as needed to stay within it.
+- Apply the same retrieval and screening budgets when you use web search as a fallback. Count all returned records, then deduplicate them before screening.
 - Prefer primary papers for specific methods and results. Use surveys to map terminology and themes, then check key claims against primary studies.
 - Treat preprints, peer-reviewed conference papers, journal articles, workshop papers, and technical reports as distinct publication types.
 - Do not rank research quality by venue tier, citation count, or provider relevance score alone.
