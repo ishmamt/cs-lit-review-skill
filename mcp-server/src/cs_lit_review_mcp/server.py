@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import email.utils
 import json
+import os
+import random
 import re
+import threading
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from typing import Any
+from urllib.error import HTTPError, URLError
 
 from mcp.server.fastmcp import FastMCP
 
@@ -17,19 +24,95 @@ DEFAULT_SOURCES = ["openalex", "semanticscholar", "dblp", "arxiv"]
 MAX_LIMIT = 25
 TIMEOUT_SECONDS = 20
 USER_AGENT = "cs-lit-review-mcp/0.1 (scholarly metadata discovery)"
+RETRY_LIMIT = 3
+CACHE_TTL_SECONDS = 24 * 60 * 60
+CACHE_MAX_ENTRIES = 512
+PROVIDER_INTERVALS = {"dblp": 2.0, "arxiv": 3.0}
+_provider_locks: dict[str, threading.Lock] = {}
+_provider_next_request: dict[str, float] = {}
+_provider_cooldown: dict[str, float] = {}
+_response_cache: dict[tuple[str, str], tuple[float, Any]] = {}
+_cache_lock = threading.Lock()
+
+
+def _wait_for_provider(provider: str) -> None:
+    lock = _provider_locks.setdefault(provider, threading.Lock())
+    with lock:
+        now = time.monotonic()
+        wait_until = max(_provider_next_request.get(provider, 0), _provider_cooldown.get(provider, 0))
+        if wait_until > now:
+            time.sleep(wait_until - now)
+        _provider_next_request[provider] = time.monotonic() + PROVIDER_INTERVALS.get(provider, 0.0)
+
+
+def _retry_delay(error: HTTPError, attempt: int) -> float:
+    retry_after = error.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            try:
+                retry_at = email.utils.parsedate_to_datetime(retry_after)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                pass
+    return min(30.0, 2**attempt + random.uniform(0, 0.5))
+
+
+def _request(provider: str, url: str, *, headers: dict[str, str] | None = None, xml: bool = False) -> Any:
+    cache_key = (provider, url)
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _response_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+        if cached:
+            del _response_cache[cache_key]
+
+    request_headers = {"User-Agent": USER_AGENT, **(headers or {})}
+    for attempt in range(RETRY_LIMIT):
+        _wait_for_provider(provider)
+        try:
+            request = urllib.request.Request(url, headers=request_headers)
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                body = response.read()
+            payload = ET.fromstring(body) if xml else json.loads(body.decode("utf-8"))
+            with _cache_lock:
+                expired = [key for key, (expires, _) in _response_cache.items() if expires <= time.monotonic()]
+                for key in expired:
+                    del _response_cache[key]
+                if len(_response_cache) >= CACHE_MAX_ENTRIES:
+                    oldest = min(_response_cache, key=lambda key: _response_cache[key][0])
+                    del _response_cache[oldest]
+                _response_cache[cache_key] = (time.monotonic() + CACHE_TTL_SECONDS, payload)
+            return payload
+        except HTTPError as error:
+            if error.code != 429 and not 500 <= error.code < 600:
+                raise
+            delay = _retry_delay(error, attempt)
+            if error.code == 429:
+                _provider_cooldown[provider] = max(_provider_cooldown.get(provider, 0), time.monotonic() + delay)
+            else:
+                time.sleep(delay)
+            if attempt + 1 >= RETRY_LIMIT:
+                raise
+        except (TimeoutError, URLError):
+            if attempt + 1 >= RETRY_LIMIT:
+                raise
+            time.sleep(min(30.0, 2**attempt + random.uniform(0, 0.5)))
+    raise RuntimeError(f"request retries exhausted for {provider}")
 
 
 def _get_json(url: str, *, headers: dict[str, str] | None = None) -> Any:
-    request_headers = {"User-Agent": USER_AGENT, **(headers or {})}
-    request = urllib.request.Request(url, headers=request_headers)
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return json.loads(response.read().decode("utf-8"))
+    provider = urllib.parse.urlparse(url).hostname or "unknown"
+    provider = {"api.openalex.org": "openalex", "api.semanticscholar.org": "semanticscholar", "dblp.org": "dblp"}.get(provider, provider)
+    return _request(provider, url, headers=headers)
 
 
 def _get_xml(url: str) -> ET.Element:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return ET.fromstring(response.read())
+    return _request("arxiv", url, xml=True)
 
 
 def _abstract_from_inverted_index(index: dict[str, list[int]] | None) -> str | None:
@@ -96,7 +179,8 @@ def _normalize_semanticscholar(item: dict[str, Any], query: str) -> dict[str, An
 def _search_semanticscholar(query: str, limit: int) -> list[dict[str, Any]]:
     fields = "title,year,authors,venue,publicationTypes,abstract,externalIds,url,citationCount"
     params = urllib.parse.urlencode({"query": query, "limit": limit, "fields": fields})
-    payload = _get_json(f"https://api.semanticscholar.org/graph/v1/paper/search?{params}")
+    headers = {"x-api-key": os.environ["SEMANTIC_SCHOLAR_API_KEY"]} if os.environ.get("SEMANTIC_SCHOLAR_API_KEY") else None
+    payload = _get_json(f"https://api.semanticscholar.org/graph/v1/paper/search?{params}", headers=headers)
     return [_normalize_semanticscholar(item, query) for item in payload.get("data", [])]
 
 
@@ -254,7 +338,8 @@ async def _semantic_scholar_graph(paper_id: str, relation: str, limit: int) -> d
     fields = "title,year,authors,venue,externalIds,url,citationCount"
     params = urllib.parse.urlencode({"fields": fields, "limit": max(1, min(limit, MAX_LIMIT))})
     url = f"https://api.semanticscholar.org/graph/v1/paper/{urllib.parse.quote(paper_id, safe='')}/{relation}?{params}"
-    payload = await asyncio.to_thread(_get_json, url)
+    headers = {"x-api-key": os.environ["SEMANTIC_SCHOLAR_API_KEY"]} if os.environ.get("SEMANTIC_SCHOLAR_API_KEY") else None
+    payload = await asyncio.to_thread(_get_json, url, headers=headers)
     papers = payload.get("data", [])
     return {
         "paper_id": paper_id,

@@ -21,4 +21,6 @@ Restart Codex after you change the MCP configuration. The skill uses the MCP too
 
 ## Provider access
 
-The server calls the public APIs for OpenAlex, Semantic Scholar, DBLP, and arXiv. These services can rate limit or change access terms. The server returns provider errors next to successful results. It does not retry or use credentials.
+The server calls the public APIs for OpenAlex, Semantic Scholar, DBLP, and arXiv. It spaces DBLP and arXiv requests, retries transient network errors and HTTP 429/5xx responses with bounded backoff, and caches successful responses in memory for 24 hours. A provider failure is returned next to successful results from other providers.
+
+For Semantic Scholar, set `SEMANTIC_SCHOLAR_API_KEY` in the environment that starts Codex to send an API key. Do not put the key in the repository or Codex config file. A key does not remove the need to respect the provider's current limits.

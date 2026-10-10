@@ -18,7 +18,7 @@ The server does not summarize papers or decide inclusion. The skill owns the rev
 | Provider | Main use | Notes |
 | --- | --- | --- |
 | OpenAlex | Broad scholarly discovery and DOI lookup | Abstracts may be absent. Abstracts are reconstructed from an inverted index when present. |
-| Semantic Scholar | Paper metadata and citation graph expansion | Anonymous requests can be rate limited. The adapter reports provider errors. |
+| Semantic Scholar | Paper metadata and citation graph expansion | Anonymous requests can be rate limited. Set `SEMANTIC_SCHOLAR_API_KEY` in the server environment to send an API key. |
 | DBLP | Computer science publication records | Strong for CS venue and proceedings records. Abstracts are often absent. |
 | arXiv | Computer science preprints | Preprints are not peer-review status evidence. |
 
@@ -35,7 +35,9 @@ Each result includes available values for `title`, `authors`, `year`, `venue`, `
 - Citation and reference expansion returns up to 20 records per request by default and caps requests at 25.
 - The review workflow tracks raw records across queries, then deduplicates them before screening. It applies a separate unique-candidate screening budget and a target for included papers.
 - Count records from citation and reference expansion toward the same raw-record budget as query results.
-- The server applies a short request timeout. A failed provider returns an error entry while other providers can still return records.
+- The server applies a 20-second request timeout, bounded retries with backoff for transient network errors and HTTP 429/5xx responses, and provider-specific request pacing (2 seconds for DBLP and 3 seconds for arXiv). It honors `Retry-After` on HTTP 429 responses.
+- Successful API responses are cached in memory for 24 hours. The cache is cleared when the MCP server process restarts.
+- A failed provider returns an error entry while other providers can still return records. Rate limits are shared with other users of the same public API key or network address, so pacing cannot guarantee that a provider will accept every request.
 - Search is a discovery aid. Review authors must judge relevance, evidence strength, and coverage.
 - The review workflow adapts query rounds to coverage gaps and new relevant-paper yield. It reports raw, deduplicated, screened, and included counts, along with provider errors.
 - API availability, policies, fields, and limits can change. Check provider documentation when changing the adapters.
